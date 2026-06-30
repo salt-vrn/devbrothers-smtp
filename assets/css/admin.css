@@ -1,0 +1,276 @@
+/**
+ * DevBrothers SMTP - Admin Styles
+ *
+ * Карточки настроек, тумблер, журнал и результат теста.
+ * Общие стили загружаются из базового плагина devbrothers-admin-panel.
+ */
+
+/* ===========================================
+   Cards
+   =========================================== */
+
+.dbsmtp-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.dbsmtp-card.dbsmtp-active {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px rgba(34, 113, 177, 0.12);
+}
+
+.dbsmtp-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f6f7f7;
+}
+
+.dbsmtp-card-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dbsmtp-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #2271b1, #135e96);
+}
+
+.dbsmtp-card-icon .dashicons {
+    width: 22px;
+    height: 22px;
+    font-size: 22px;
+}
+
+.dbsmtp-card-title h3 {
+    margin: 0 0 2px;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    line-height: 1.3;
+}
+
+.dbsmtp-card-status {
+    display: block;
+    font-size: 12px;
+    color: #787c82;
+    transition: color 0.2s ease;
+}
+
+.dbsmtp-card-status.dbsmtp-status-on {
+    color: #00a32a;
+    font-weight: 500;
+}
+
+/* --- Toggle Switch --- */
+
+.dbsmtp-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.dbsmtp-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.dbsmtp-toggle-track {
+    display: block;
+    width: 44px;
+    height: 24px;
+    background: #c3c4c7;
+    border-radius: 12px;
+    position: relative;
+    transition: background-color 0.25s ease;
+}
+
+.dbsmtp-toggle input:checked + .dbsmtp-toggle-track {
+    background: #2271b1;
+}
+
+.dbsmtp-toggle input:focus + .dbsmtp-toggle-track {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
+}
+
+.dbsmtp-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.dbsmtp-toggle input:checked + .dbsmtp-toggle-track .dbsmtp-toggle-thumb {
+    transform: translateX(20px);
+}
+
+/* --- Card Body --- */
+
+.dbsmtp-card-body {
+    padding: 20px;
+    border-top: 1px solid #f0f0f1;
+}
+
+.dbsmtp-card-header + .dbsmtp-card-body {
+    transition: opacity 0.25s ease;
+}
+
+.dbsmtp-card.dbsmtp-active .dbsmtp-card-body,
+#test .dbsmtp-card-body,
+#logs .dbsmtp-card-body {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.dbsmtp-card:not(.dbsmtp-active) .dbsmtp-card-header + .dbsmtp-card-body {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.dbsmtp-subhead {
+    margin: 4px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.dbsmtp-inline-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dbsmtp-auth-field.dbsmtp-hidden {
+    display: none;
+}
+
+/* --- Hints --- */
+
+.dbsmtp-hint {
+    margin: 8px 0 0;
+    color: #787c82;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.dbsmtp-card-body > .dbsmtp-hint:first-child {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.devbrothers-settings-category hr {
+    border: none;
+    border-top: 1px solid #f0f0f1;
+    margin: 20px 0;
+}
+
+/* ===========================================
+   Test result
+   =========================================== */
+
+.dbsmtp-test-result {
+    margin-top: 12px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid transparent;
+}
+
+.dbsmtp-test-result.dbsmtp-success {
+    background: #edfaef;
+    border-color: #00a32a;
+    color: #135e2a;
+}
+
+.dbsmtp-test-result.dbsmtp-error {
+    background: #fcf0f1;
+    border-color: #d63638;
+    color: #8a1f21;
+}
+
+/* ===========================================
+   Logs
+   =========================================== */
+
+.dbsmtp-logs-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.dbsmtp-logs-hint {
+    color: #787c82;
+    font-size: 12px;
+}
+
+.dbsmtp-logs-empty {
+    color: #787c82;
+    font-style: italic;
+    margin: 0;
+}
+
+.dbsmtp-logs-table {
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.dbsmtp-logs-table th {
+    font-weight: 600;
+}
+
+.dbsmtp-log-message {
+    max-width: 280px;
+    color: #787c82;
+    font-size: 12px;
+    word-break: break-word;
+}
+
+.dbsmtp-status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+}
+
+.dbsmtp-status-sent {
+    background: #edfaef;
+    color: #00752a;
+}
+
+.dbsmtp-status-failed {
+    background: #fcf0f1;
+    color: #b32d2e;
+}
+
+.dbsmtp-provider-hint {
+    max-width: 600px;
+    margin-top: 8px;
+}
