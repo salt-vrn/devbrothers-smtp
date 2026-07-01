@@ -96,7 +96,6 @@ Yes. SMTP configuration, presets, test email, delivery log, and wp-config passwo
 
 1. SMTP connection settings with provider presets
 2. Test email sending
-3. Delivery log
 
 == Changelog ==
 
