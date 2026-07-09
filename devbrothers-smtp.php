@@ -2,8 +2,8 @@
 /**
  * Plugin Name: DevBrothers SMTP
  * Plugin URI: https://devbrothers.ru/smtp/
- * Description: Send WordPress emails through your own SMTP server with a connection test and a delivery log.
- * Version: 1.1.0
+ * Description: Send WordPress emails through your own SMTP server, with a delivery log and optional Telegram copies.
+ * Version: 1.2.0
  * Author: DevBrothers
  * Author URI: https://devbrothers.ru
  * License: GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('DBSMTP_VERSION', '1.1.0');
+define('DBSMTP_VERSION', '1.2.0');
 define('DBSMTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DBSMTP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('DBSMTP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -52,6 +52,11 @@ class DBSMTP_Plugin {
      */
     public $logger;
 
+    /**
+     * @var DBSMTP_Telegram
+     */
+    public $telegram;
+
     public static function get_instance() {
         if (self::$instance === null) {
             self::$instance = new self();
@@ -68,12 +73,14 @@ class DBSMTP_Plugin {
     private function load_dependencies() {
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-settings.php';
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-mailer.php';
+        require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-telegram.php';
     }
 
     private function init_components() {
         $this->settings = new DBSMTP_Settings();
         $this->logger   = new DBSMTP_Logger();
         $this->mailer   = new DBSMTP_Mailer($this->settings, $this->logger);
+        $this->telegram = new DBSMTP_Telegram($this->settings);
     }
 
     private function init_hooks() {
@@ -82,6 +89,7 @@ class DBSMTP_Plugin {
         add_action('admin_init', [$this, 'maybe_upgrade_db']);
 
         add_action('wp_ajax_dbsmtp_send_test', [$this, 'ajax_send_test']);
+        add_action('wp_ajax_dbsmtp_test_telegram', [$this, 'ajax_test_telegram']);
         add_action('wp_ajax_dbsmtp_clear_logs', [$this, 'ajax_clear_logs']);
     }
 
@@ -115,6 +123,11 @@ class DBSMTP_Plugin {
                     'id'   => 'connection',
                     'name' => __('Настройки SMTP', 'devbrothers-smtp'),
                     'icon' => 'dashicons-admin-settings',
+                ],
+                [
+                    'id'   => 'telegram',
+                    'name' => __('Telegram', 'devbrothers-smtp'),
+                    'icon' => 'dashicons-format-chat',
                 ],
                 [
                     'id'   => 'test',
@@ -156,19 +169,22 @@ class DBSMTP_Plugin {
         );
 
         wp_localize_script('dbsmtp-admin', 'dbsmtpConfig', [
-            'ajaxUrl'   => admin_url('admin-ajax.php'),
-            'testNonce' => wp_create_nonce('dbsmtp_test_nonce'),
-            'logsNonce' => wp_create_nonce('dbsmtp_logs_nonce'),
-            'presets'   => DBSMTP_Providers::get_presets_for_js(),
-            'strings'   => [
-                'enabled'      => __('Включён', 'devbrothers-smtp'),
-                'disabled'     => __('Выключен', 'devbrothers-smtp'),
-                'sending'      => __('Отправка...', 'devbrothers-smtp'),
-                'sendTest'     => __('Отправить тестовое письмо', 'devbrothers-smtp'),
-                'emptyEmail'   => __('Укажите email получателя.', 'devbrothers-smtp'),
-                'requestError' => __('Ошибка запроса. Попробуйте ещё раз.', 'devbrothers-smtp'),
-                'confirmClear' => __('Очистить весь журнал отправок?', 'devbrothers-smtp'),
-                'cleared'      => __('Журнал очищен.', 'devbrothers-smtp'),
+            'ajaxUrl'        => admin_url('admin-ajax.php'),
+            'testNonce'      => wp_create_nonce('dbsmtp_test_nonce'),
+            'telegramNonce'  => wp_create_nonce('dbsmtp_telegram_nonce'),
+            'logsNonce'      => wp_create_nonce('dbsmtp_logs_nonce'),
+            'presets'        => DBSMTP_Providers::get_presets_for_js(),
+            'strings'        => [
+                'enabled'           => __('Включён', 'devbrothers-smtp'),
+                'disabled'          => __('Выключен', 'devbrothers-smtp'),
+                'sending'           => __('Отправка...', 'devbrothers-smtp'),
+                'sendTest'          => __('Отправить тестовое письмо', 'devbrothers-smtp'),
+                'sendTelegramTest'  => __('Отправить тест в Telegram', 'devbrothers-smtp'),
+                'emptyEmail'        => __('Укажите email получателя.', 'devbrothers-smtp'),
+                'telegramNeedSave'  => __('Сначала сохраните токен бота и Chat ID.', 'devbrothers-smtp'),
+                'requestError'      => __('Ошибка запроса. Попробуйте ещё раз.', 'devbrothers-smtp'),
+                'confirmClear'      => __('Очистить весь журнал отправок?', 'devbrothers-smtp'),
+                'cleared'           => __('Журнал очищен.', 'devbrothers-smtp'),
             ],
         ]);
     }
@@ -220,6 +236,56 @@ class DBSMTP_Plugin {
             'message' => $error !== ''
                 ? $error
                 : __('Не удалось отправить письмо. Проверьте настройки SMTP.', 'devbrothers-smtp'),
+        ]);
+    }
+
+    /**
+     * AJAX: тестовое уведомление в Telegram.
+     */
+    public function ajax_test_telegram() {
+        if (
+            !isset($_POST['nonce'])
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'dbsmtp_telegram_nonce')
+        ) {
+            wp_send_json_error(['message' => __('Ошибка безопасности.', 'devbrothers-smtp')]);
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Недостаточно прав.', 'devbrothers-smtp')]);
+        }
+
+        // Токен не прогоняем через sanitize_text_field — только убираем переносы,
+        // формат проверяется в DBSMTP_Telegram::send_message().
+        $token = '';
+        if (isset($_POST['bot_token'])) {
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Token format validated in send_message().
+            $token = trim(str_replace(["\r", "\n"], '', (string) wp_unslash($_POST['bot_token'])));
+        }
+        if ($token === '') {
+            $token = trim($this->settings->get_telegram_bot_token());
+        }
+
+        $chat_id = '';
+        if (isset($_POST['chat_id'])) {
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Chat ID format validated in send_message().
+            $chat_id = trim(str_replace([' ', "\r", "\n"], '', (string) wp_unslash($_POST['chat_id'])));
+        }
+        if ($chat_id === '') {
+            $chat_id = trim($this->settings->get_telegram_chat_id());
+        }
+
+        if ($token === '' || $chat_id === '') {
+            wp_send_json_error(['message' => __('Укажите токен бота и Chat ID.', 'devbrothers-smtp')]);
+        }
+
+        $result = $this->telegram->send_test_message_with_credentials($token, $chat_id);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'message' => __('Тестовое сообщение отправлено в Telegram.', 'devbrothers-smtp'),
         ]);
     }
 

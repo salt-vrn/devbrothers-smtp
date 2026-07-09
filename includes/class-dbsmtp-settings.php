@@ -23,17 +23,22 @@ class DBSMTP_Settings {
      */
     public function get_settings() {
         $defaults = [
-            'provider'   => 'custom',
-            'enabled'    => false,
-            'host'       => '',
-            'port'       => 587,
-            'encryption' => 'tls',
-            'auth'       => true,
-            'username'   => '',
-            'password'   => '',
-            'from_email' => '',
-            'from_name'  => '',
-            'force_from' => false,
+            'provider'               => 'custom',
+            'enabled'                => false,
+            'host'                   => '',
+            'port'                   => 587,
+            'encryption'             => 'tls',
+            'auth'                   => true,
+            'username'               => '',
+            'password'               => '',
+            'from_email'             => '',
+            'from_name'              => '',
+            'force_from'             => false,
+            'telegram_enabled'       => false,
+            'telegram_bot_token'     => '',
+            'telegram_chat_id'       => '',
+            'telegram_notify_success'=> true,
+            'telegram_notify_failed' => false,
         ];
 
         $settings = wp_parse_args(get_option($this->option_name, $defaults), $defaults);
@@ -76,6 +81,48 @@ class DBSMTP_Settings {
     }
 
     /**
+     * Токен Telegram-бота (константа DBSMTP_TELEGRAM_BOT_TOKEN в wp-config.php имеет приоритет).
+     *
+     * @return string
+     */
+    public function get_telegram_bot_token() {
+        if (defined('DBSMTP_TELEGRAM_BOT_TOKEN') && DBSMTP_TELEGRAM_BOT_TOKEN !== '') {
+            return (string) DBSMTP_TELEGRAM_BOT_TOKEN;
+        }
+
+        $settings = $this->get_settings();
+        return isset($settings['telegram_bot_token']) ? (string) $settings['telegram_bot_token'] : '';
+    }
+
+    /**
+     * Chat ID Telegram (константа DBSMTP_TELEGRAM_CHAT_ID в wp-config.php имеет приоритет).
+     *
+     * @return string
+     */
+    public function get_telegram_chat_id() {
+        if (defined('DBSMTP_TELEGRAM_CHAT_ID') && DBSMTP_TELEGRAM_CHAT_ID !== '') {
+            return (string) DBSMTP_TELEGRAM_CHAT_ID;
+        }
+
+        $settings = $this->get_settings();
+        return isset($settings['telegram_chat_id']) ? (string) $settings['telegram_chat_id'] : '';
+    }
+
+    /**
+     * @return bool
+     */
+    public function telegram_token_in_config() {
+        return defined('DBSMTP_TELEGRAM_BOT_TOKEN') && DBSMTP_TELEGRAM_BOT_TOKEN !== '';
+    }
+
+    /**
+     * @return bool
+     */
+    public function telegram_chat_id_in_config() {
+        return defined('DBSMTP_TELEGRAM_CHAT_ID') && DBSMTP_TELEGRAM_CHAT_ID !== '';
+    }
+
+    /**
      * Отрисовка страницы настроек.
      */
     public function render_settings_page() {
@@ -106,6 +153,7 @@ class DBSMTP_Settings {
         }
 
         $is_active = !empty($settings['enabled']);
+        $telegram_active = !empty($settings['telegram_enabled']);
         ?>
         <form method="post" action="">
             <?php wp_nonce_field('dbsmtp_settings_nonce'); ?>
@@ -311,6 +359,126 @@ class DBSMTP_Settings {
                         </table>
                     </div>
                 </div>
+            </div>
+
+            <!-- Категория: Telegram -->
+            <div id="telegram" class="devbrothers-settings-category">
+                <h2>
+                    <span class="dashicons dashicons-format-chat"></span>
+                    <?php esc_html_e('Уведомления в Telegram', 'devbrothers-smtp'); ?>
+                </h2>
+
+                <div class="dbsmtp-card dbsmtp-card-telegram<?php echo esc_attr($telegram_active ? ' dbsmtp-active' : ''); ?>">
+                    <div class="dbsmtp-card-header">
+                        <div class="dbsmtp-card-title">
+                            <span class="dbsmtp-card-icon dbsmtp-card-icon-telegram"><span class="dashicons dashicons-format-chat"></span></span>
+                            <div>
+                                <h3><?php esc_html_e('Дублировать письма в Telegram', 'devbrothers-smtp'); ?></h3>
+                                <span class="dbsmtp-card-status dbsmtp-telegram-status<?php echo esc_attr($telegram_active ? ' dbsmtp-status-on' : ''); ?>">
+                                    <?php echo $telegram_active
+                                        ? esc_html__('Включён', 'devbrothers-smtp')
+                                        : esc_html__('Выключен', 'devbrothers-smtp'); ?>
+                                </span>
+                            </div>
+                        </div>
+                        <label class="dbsmtp-toggle">
+                            <input type="checkbox"
+                                   name="dbsmtp_settings[telegram_enabled]"
+                                   id="dbsmtp_telegram_enabled"
+                                   value="1"
+                                   <?php checked($telegram_active); ?> />
+                            <span class="dbsmtp-toggle-track">
+                                <span class="dbsmtp-toggle-thumb"></span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="dbsmtp-card-body">
+                        <p class="dbsmtp-hint">
+                            <?php esc_html_e('При отправке писем через wp_mail содержимое будет отправляться в указанный Telegram-чат. Создайте бота через @BotFather, напишите ему /start и узнайте Chat ID через getUpdates или @userinfobot.', 'devbrothers-smtp'); ?>
+                        </p>
+
+                        <table class="form-table" role="presentation">
+                            <tr>
+                                <th scope="row">
+                                    <label for="dbsmtp_telegram_bot_token"><?php esc_html_e('Токен бота', 'devbrothers-smtp'); ?></label>
+                                </th>
+                                <td>
+                                    <?php if ($this->telegram_token_in_config()) : ?>
+                                        <p class="description">
+                                            <span class="dashicons dashicons-lock"></span>
+                                            <?php esc_html_e('Токен задан константой DBSMTP_TELEGRAM_BOT_TOKEN в wp-config.php.', 'devbrothers-smtp'); ?>
+                                        </p>
+                                    <?php else : ?>
+                                        <?php $has_token = !empty($settings['telegram_bot_token']); ?>
+                                        <input type="password"
+                                               name="dbsmtp_settings[telegram_bot_token]"
+                                               id="dbsmtp_telegram_bot_token"
+                                               class="large-text"
+                                               autocomplete="off"
+                                               value=""
+                                               placeholder="<?php echo esc_attr($has_token
+                                                   ? __('Токен сохранён — оставьте пустым, чтобы не менять', 'devbrothers-smtp')
+                                                   : '123456789:ABCdefGHIjklMNOpqrsTUVwxyz'); ?>" />
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="dbsmtp_telegram_chat_id"><?php esc_html_e('Chat ID', 'devbrothers-smtp'); ?></label>
+                                </th>
+                                <td>
+                                    <?php if ($this->telegram_chat_id_in_config()) : ?>
+                                        <p class="description">
+                                            <span class="dashicons dashicons-lock"></span>
+                                            <?php esc_html_e('Chat ID задан константой DBSMTP_TELEGRAM_CHAT_ID в wp-config.php.', 'devbrothers-smtp'); ?>
+                                        </p>
+                                    <?php else : ?>
+                                        <input type="text"
+                                               name="dbsmtp_settings[telegram_chat_id]"
+                                               id="dbsmtp_telegram_chat_id"
+                                               class="regular-text"
+                                               placeholder="123456789"
+                                               value="<?php echo esc_attr($settings['telegram_chat_id']); ?>" />
+                                        <p class="dbsmtp-hint">
+                                            <?php esc_html_e('ID личного чата, группы или канала (для групп обычно отрицательное число).', 'devbrothers-smtp'); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php esc_html_e('Когда уведомлять', 'devbrothers-smtp'); ?></th>
+                                <td>
+                                    <label class="dbsmtp-inline-toggle">
+                                        <input type="checkbox"
+                                               name="dbsmtp_settings[telegram_notify_success]"
+                                               id="dbsmtp_telegram_notify_success"
+                                               value="1"
+                                               <?php checked(!empty($settings['telegram_notify_success'])); ?> />
+                                        <?php esc_html_e('При успешной отправке', 'devbrothers-smtp'); ?>
+                                    </label>
+                                    <br />
+                                    <label class="dbsmtp-inline-toggle">
+                                        <input type="checkbox"
+                                               name="dbsmtp_settings[telegram_notify_failed]"
+                                               id="dbsmtp_telegram_notify_failed"
+                                               value="1"
+                                               <?php checked(!empty($settings['telegram_notify_failed'])); ?> />
+                                        <?php esc_html_e('При ошибке отправки', 'devbrothers-smtp'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p>
+                            <button type="button" id="dbsmtp-test-telegram" class="button">
+                                <span class="dashicons dashicons-format-chat"></span>
+                                <?php esc_html_e('Отправить тест в Telegram', 'devbrothers-smtp'); ?>
+                            </button>
+                        </p>
+                        <div id="dbsmtp-telegram-test-result" class="dbsmtp-test-result" style="display:none;"></div>
+                    </div>
+                </div>
 
                 <p class="submit">
                     <button type="submit" name="dbsmtp_save_settings" class="button button-primary">
@@ -459,6 +627,48 @@ class DBSMTP_Settings {
             : '';
 
         $sanitized['force_from'] = !empty($input['force_from']);
+
+        $sanitized['telegram_enabled'] = !empty($input['telegram_enabled']);
+        $sanitized['telegram_notify_success'] = !empty($input['telegram_notify_success']);
+        $sanitized['telegram_notify_failed'] = !empty($input['telegram_notify_failed']);
+
+        $current_token = isset($current['telegram_bot_token']) ? $current['telegram_bot_token'] : '';
+        $current_chat  = isset($current['telegram_chat_id']) ? $current['telegram_chat_id'] : '';
+
+        if ($this->telegram_token_in_config()) {
+            // Поле скрыто — сохраняем прежнее значение из БД.
+            $sanitized['telegram_bot_token'] = $current_token;
+        } else {
+            $new_token = isset($input['telegram_bot_token'])
+                ? trim(str_replace(["\r", "\n"], '', (string) $input['telegram_bot_token']))
+                : '';
+
+            if ($new_token === '') {
+                // Пустое поле означает «не менять».
+                $sanitized['telegram_bot_token'] = $current_token;
+            } elseif (preg_match('/^\d+:[A-Za-z0-9._-]+$/', $new_token)) {
+                $sanitized['telegram_bot_token'] = $new_token;
+            } else {
+                // Некорректный формат — не затираем сохранённый токен.
+                $sanitized['telegram_bot_token'] = $current_token;
+            }
+        }
+
+        if ($this->telegram_chat_id_in_config()) {
+            $sanitized['telegram_chat_id'] = $current_chat;
+        } else {
+            $chat_raw = isset($input['telegram_chat_id']) ? (string) $input['telegram_chat_id'] : '';
+            $chat_raw = trim(str_replace(["\r", "\n", ' '], '', $chat_raw));
+
+            if ($chat_raw === '') {
+                $sanitized['telegram_chat_id'] = '';
+            } elseif (preg_match('/^-?\d+$/', $chat_raw)) {
+                $sanitized['telegram_chat_id'] = $chat_raw;
+            } else {
+                // Некорректный Chat ID — оставляем прежний.
+                $sanitized['telegram_chat_id'] = $current_chat;
+            }
+        }
 
         return $sanitized;
     }

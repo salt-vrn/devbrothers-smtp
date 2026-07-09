@@ -55,6 +55,15 @@
     font-size: 22px;
 }
 
+.dbsmtp-card-icon-telegram {
+    background: linear-gradient(135deg, #229ed9, #1787c5);
+}
+
+.dbsmtp-card-telegram.dbsmtp-active {
+    border-color: #229ed9;
+    box-shadow: 0 0 0 1px rgba(34, 158, 217, 0.12);
+}
+
 .dbsmtp-card-title h3 {
     margin: 0 0 2px;
     padding: 0;

@@ -154,11 +154,76 @@
         });
     }
 
+    function initTelegramCard() {
+        var $card = $('.dbsmtp-card-telegram');
+        var $toggle = $('#dbsmtp_telegram_enabled');
+        var $status = $card.find('.dbsmtp-telegram-status');
+
+        if (!$toggle.length) {
+            return;
+        }
+
+        function update() {
+            var active = $toggle.is(':checked');
+            $card.toggleClass('dbsmtp-active', active);
+            $status
+                .text(active ? dbsmtpConfig.strings.enabled : dbsmtpConfig.strings.disabled)
+                .toggleClass('dbsmtp-status-on', active);
+        }
+
+        $toggle.on('change', update);
+        update();
+    }
+
+    function initTestTelegram() {
+        var $button = $('#dbsmtp-test-telegram');
+        var $result = $('#dbsmtp-telegram-test-result');
+        var $token = $('#dbsmtp_telegram_bot_token');
+        var $chatId = $('#dbsmtp_telegram_chat_id');
+
+        if (!$button.length) {
+            return;
+        }
+
+        $button.on('click', function() {
+            var originalText = $button.html();
+            $button.prop('disabled', true).text(dbsmtpConfig.strings.sending);
+            $result.hide();
+
+            $.post(dbsmtpConfig.ajaxUrl, {
+                action: 'dbsmtp_test_telegram',
+                nonce: dbsmtpConfig.telegramNonce,
+                bot_token: $token.length ? $.trim($token.val()) : '',
+                chat_id: $chatId.length ? $.trim($chatId.val()) : ''
+            }).done(function(response) {
+                if (response && response.success) {
+                    showTelegramResult(true, response.data.message);
+                } else {
+                    showTelegramResult(false, response && response.data ? response.data.message : dbsmtpConfig.strings.requestError);
+                }
+            }).fail(function() {
+                showTelegramResult(false, dbsmtpConfig.strings.requestError);
+            }).always(function() {
+                $button.prop('disabled', false).html(originalText);
+            });
+        });
+
+        function showTelegramResult(success, message) {
+            $result
+                .removeClass('dbsmtp-success dbsmtp-error')
+                .addClass(success ? 'dbsmtp-success' : 'dbsmtp-error')
+                .text(message)
+                .show();
+        }
+    }
+
     $(function() {
         initProviderPresets();
         initToggleCard();
+        initTelegramCard();
         initAuthFields();
         initTestEmail();
+        initTestTelegram();
         initClearLogs();
     });
 

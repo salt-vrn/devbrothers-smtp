@@ -1,30 +1,31 @@
 === DevBrothers SMTP ===
 Contributors: lzolotarev
-Tags: smtp, wp_mail, email, yandex, mail.ru
+Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Send WordPress emails through your own SMTP server, with one-click presets for Yandex and Mail.ru.
+Send WordPress emails through your SMTP server, with a delivery log and optional Telegram copies of messages.
 
 == Description ==
 
-**DevBrothers SMTP** reroutes the standard WordPress mailer (`wp_mail`) through your own SMTP server instead of the unreliable PHP `mail()` function. It configures the PHPMailer instance bundled with WordPress on the `phpmailer_init` hook, so every plugin and theme that calls `wp_mail()` benefits automatically.
+**DevBrothers SMTP** routes the standard WordPress mailer (`wp_mail`) through your own SMTP server instead of PHP `mail()`. It configures the PHPMailer instance bundled with WordPress on the `phpmailer_init` hook, so every plugin and theme that calls `wp_mail()` benefits automatically.
 
-This plugin focuses on a simple, privacy-friendly setup for Russian mail providers and small sites. All core features are free — no premium tier, no upsells, no external email APIs.
+Optionally, you can also send a plain-text copy of each email to a Telegram chat (success and/or failure). Telegram notifications are disabled by default and only run when you enable them and provide a bot token and chat ID.
 
 = Key Features =
 
 * **One-click presets** — Yandex Mail and Mail.ru (host, port, SSL) filled in automatically
 * **Custom SMTP** — manual host, port, TLS or SSL, optional authentication
 * **Custom sender** — optional From email and From name, with a force option
-* **Test email** — one-click send to verify settings
-* **Delivery log** — last 200 messages with sent/failed status and error text (free; many competitors charge for this)
-* **Secure password** — optional `DBSMTP_PASSWORD` constant in `wp-config.php` instead of the database
+* **Test email** — one-click send to verify SMTP settings
+* **Delivery log** — last 200 messages with sent/failed status and error text
+* **Telegram copies** — optional plain-text copy of emails to a Telegram chat (opt-in)
+* **Secure secrets** — optional `DBSMTP_PASSWORD`, `DBSMTP_TELEGRAM_BOT_TOKEN`, and `DBSMTP_TELEGRAM_CHAT_ID` constants in `wp-config.php`
 * **DevBrothers Admin Panel** — settings inside the unified DevBrothers interface
 
 = Requirements =
@@ -40,19 +41,36 @@ This plugin focuses on a simple, privacy-friendly setup for Russian mail provide
 3. Go to **DevBrothers → SMTP**.
 4. Choose **Yandex Mail**, **Mail.ru**, or **Custom server**, enter your credentials, and save.
 5. Send a test email to verify the configuration.
+6. (Optional) Open the **Telegram** section, enable notifications, enter bot token and Chat ID, then send a Telegram test.
 
 == External services ==
 
-This plugin sends email through an SMTP server that **you** configure in the settings. No email is sent to DevBrothers or any service we operate.
+This plugin connects only to services that **you** configure. No data is sent to DevBrothers.
 
 = Your SMTP server =
 
-When SMTP delivery is enabled, WordPress emails (recipients, subject, body, attachments, and headers) are transmitted to the host, port, and account you specify. The plugin does not connect to a fixed third-party provider — you choose the server (for example Yandex Mail, Mail.ru, your hosting provider, or another SMTP service).
+When SMTP delivery is enabled, WordPress emails (recipients, subject, body, attachments, and headers) are transmitted to the host, port, and account you specify. The plugin does not connect to a fixed third-party email API — you choose the server (for example Yandex Mail, Mail.ru, your hosting provider, or another SMTP service).
 
-Authentication credentials (username and password) are stored in your WordPress database or in the `DBSMTP_PASSWORD` constant in `wp-config.php`. They are used only to connect to your configured SMTP server.
+Authentication credentials (username and password) are stored in your WordPress database, or in the `DBSMTP_PASSWORD` constant in `wp-config.php`. They are used only to connect to your configured SMTP server.
 
 * Service provider: defined by you (the site administrator)
 * Terms and privacy: depend on your chosen SMTP provider
+
+= Telegram Bot API (optional) =
+
+When Telegram notifications are enabled, the plugin sends a plain-text summary of the email (site name, URL, From, To, subject, body text, and optional error message) to the Telegram Bot API endpoint `https://api.telegram.org/bot{token}/sendMessage`.
+
+Data is sent only when:
+
+* the Telegram toggle is enabled in settings, and
+* a bot token and Chat ID are configured (in settings or via `wp-config.php` constants), and
+* the corresponding notify option (success and/or failure) is enabled.
+
+Bot token and Chat ID are stored in your WordPress database, or in the `DBSMTP_TELEGRAM_BOT_TOKEN` / `DBSMTP_TELEGRAM_CHAT_ID` constants in `wp-config.php`. They are used only to call the Telegram Bot API.
+
+* Service provider: Telegram FZ-LLC
+* Terms: https://telegram.org/tos/bot-developers
+* Privacy: https://telegram.org/privacy
 
 = Local delivery log =
 
@@ -68,13 +86,27 @@ Select **Yandex Mail** in the provider dropdown. Use your full Yandex email as t
 
 Select **Mail.ru** in the provider dropdown. Use your full Mail.ru email as the username. If two-factor protection is enabled, use an app-specific password. The From address should match your mailbox.
 
-= Where do I store the SMTP password securely? =
+= How do I enable Telegram copies of emails? =
 
-You can define a constant in `wp-config.php` instead of storing the password in the database:
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the bot token.
+2. Start a chat with the bot (send `/start`), or add it to a group/channel.
+3. Get your Chat ID (for example via `getUpdates` or a helper bot such as `@userinfobot`).
+4. In **DevBrothers → SMTP → Telegram**, enable notifications, paste the token and Chat ID, choose success and/or failure, and save.
+5. Click **Send Telegram test**.
+
+= Where do I store secrets securely? =
+
+You can define constants in `wp-config.php` instead of storing values in the database:
 
 `define('DBSMTP_PASSWORD', 'your-smtp-password');`
+`define('DBSMTP_TELEGRAM_BOT_TOKEN', '123456:ABC...');`
+`define('DBSMTP_TELEGRAM_CHAT_ID', '123456789');`
 
-When this constant is defined, the password field in the settings is hidden and the constant value is used.
+When a constant is defined, the matching field in the settings UI is hidden and the constant value is used.
+
+= Does Telegram receive the full email body? =
+
+Yes, when enabled. The plugin sends a plain-text version (HTML tags stripped) truncated to Telegram’s message length limit. Attachments are not uploaded — only the attachment count is mentioned.
 
 = My emails go to spam. What should I check? =
 
@@ -86,18 +118,22 @@ DevBrothers SMTP registers its settings page inside the DevBrothers admin UI. In
 
 = Does this plugin work when SMTP is disabled? =
 
-Yes. When the SMTP toggle is off, WordPress uses its default mail transport and this plugin does not alter PHPMailer settings.
-
-= Is everything really free? =
-
-Yes. SMTP configuration, presets, test email, delivery log, and wp-config password support are included at no cost. There is no premium version.
+Yes. When the SMTP toggle is off, WordPress uses its default mail transport and this plugin does not alter PHPMailer settings. Telegram notifications can still run independently if enabled.
 
 == Screenshots ==
 
 1. SMTP connection settings with provider presets
-2. Test email sending
+2. Telegram notification settings
+3. Test email sending
+4. Delivery log
 
 == Changelog ==
+
+= 1.2.0 =
+* Optional Telegram copies of sent/failed emails (opt-in)
+* Secure storage helpers for Telegram bot token and Chat ID via wp-config.php
+* Bot token is not echoed back in the settings form (same pattern as SMTP password)
+* Documented Telegram Bot API under External services
 
 = 1.1.0 =
 * One-click presets for Yandex Mail and Mail.ru
@@ -111,6 +147,9 @@ Yes. SMTP configuration, presets, test email, delivery log, and wp-config passwo
 * Integration with DevBrothers Admin Panel
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds optional Telegram email copies. Review the Telegram settings and External services notes before enabling.
 
 = 1.1.0 =
 Adds Yandex and Mail.ru presets. Unencrypted SMTP is no longer available.
