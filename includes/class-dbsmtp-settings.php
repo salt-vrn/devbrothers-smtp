@@ -39,6 +39,9 @@ class DBSMTP_Settings {
             'telegram_chat_id'       => '',
             'telegram_notify_success'=> true,
             'telegram_notify_failed' => false,
+            'fallback_alert_enabled' => false,
+            'fallback_alert_email'   => '',
+            'fallback_alert_cooldown'=> 30,
         ];
 
         $settings = wp_parse_args(get_option($this->option_name, $defaults), $defaults);
@@ -357,6 +360,68 @@ class DBSMTP_Settings {
                                 </td>
                             </tr>
                         </table>
+
+                        <hr />
+
+                        <h4 class="dbsmtp-subhead"><?php esc_html_e('Уведомление при сбое SMTP', 'devbrothers-smtp'); ?></h4>
+                        <p class="dbsmtp-hint">
+                            <?php esc_html_e('Если отправка через SMTP не удалась, администратору будет отправлено служебное письмо стандартной функцией PHP mail() (без SMTP). Повторные уведомления ограничены выбранным интервалом.', 'devbrothers-smtp'); ?>
+                        </p>
+                        <table class="form-table" role="presentation">
+                            <tr>
+                                <th scope="row"><?php esc_html_e('Fallback-уведомление', 'devbrothers-smtp'); ?></th>
+                                <td>
+                                    <label class="dbsmtp-inline-toggle">
+                                        <input type="checkbox"
+                                               name="dbsmtp_settings[fallback_alert_enabled]"
+                                               id="dbsmtp_fallback_alert_enabled"
+                                               value="1"
+                                               <?php checked(!empty($settings['fallback_alert_enabled'])); ?> />
+                                        <?php esc_html_e('Уведомлять администратора при ошибке SMTP', 'devbrothers-smtp'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="dbsmtp_fallback_alert_email"><?php esc_html_e('Email администратора', 'devbrothers-smtp'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="email"
+                                           name="dbsmtp_settings[fallback_alert_email]"
+                                           id="dbsmtp_fallback_alert_email"
+                                           class="regular-text"
+                                           placeholder="<?php echo esc_attr(get_option('admin_email')); ?>"
+                                           value="<?php echo esc_attr($settings['fallback_alert_email']); ?>" />
+                                    <p class="dbsmtp-hint">
+                                        <?php esc_html_e('Если пусто — используется email администратора сайта.', 'devbrothers-smtp'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="dbsmtp_fallback_alert_cooldown"><?php esc_html_e('Интервал повторов', 'devbrothers-smtp'); ?></label>
+                                </th>
+                                <td>
+                                    <select name="dbsmtp_settings[fallback_alert_cooldown]" id="dbsmtp_fallback_alert_cooldown">
+                                        <option value="15" <?php selected((int) $settings['fallback_alert_cooldown'], 15); ?>>
+                                            <?php esc_html_e('15 минут', 'devbrothers-smtp'); ?>
+                                        </option>
+                                        <option value="30" <?php selected((int) $settings['fallback_alert_cooldown'], 30); ?>>
+                                            <?php esc_html_e('30 минут', 'devbrothers-smtp'); ?>
+                                        </option>
+                                        <option value="60" <?php selected((int) $settings['fallback_alert_cooldown'], 60); ?>>
+                                            <?php esc_html_e('1 час', 'devbrothers-smtp'); ?>
+                                        </option>
+                                        <option value="120" <?php selected((int) $settings['fallback_alert_cooldown'], 120); ?>>
+                                            <?php esc_html_e('2 часа', 'devbrothers-smtp'); ?>
+                                        </option>
+                                    </select>
+                                    <p class="dbsmtp-hint">
+                                        <?php esc_html_e('Не чаще одного уведомления за выбранный период, чтобы не заспамить почту при массовых сбоях.', 'devbrothers-smtp'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -669,6 +734,17 @@ class DBSMTP_Settings {
                 $sanitized['telegram_chat_id'] = $current_chat;
             }
         }
+
+        $sanitized['fallback_alert_enabled'] = !empty($input['fallback_alert_enabled']);
+
+        $fallback_email = isset($input['fallback_alert_email'])
+            ? sanitize_email($input['fallback_alert_email'])
+            : '';
+        $sanitized['fallback_alert_email'] = is_email($fallback_email) ? $fallback_email : '';
+
+        $cooldown = isset($input['fallback_alert_cooldown']) ? (int) $input['fallback_alert_cooldown'] : 30;
+        $allowed_cooldowns = [15, 30, 60, 120];
+        $sanitized['fallback_alert_cooldown'] = in_array($cooldown, $allowed_cooldowns, true) ? $cooldown : 30;
 
         return $sanitized;
     }

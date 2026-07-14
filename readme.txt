@@ -3,7 +3,7 @@ Contributors: lzolotarev
 Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later

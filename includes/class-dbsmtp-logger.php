@@ -69,6 +69,10 @@ class DBSMTP_Logger {
      * @param array $mail_data Данные письма из хука wp_mail_succeeded.
      */
     public function log_success($mail_data) {
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return;
+        }
+
         $to      = isset($mail_data['to']) ? $mail_data['to'] : '';
         $subject = isset($mail_data['subject']) ? $mail_data['subject'] : '';
 
@@ -81,6 +85,10 @@ class DBSMTP_Logger {
      * @param WP_Error $error Ошибка из хука wp_mail_failed.
      */
     public function log_failure($error) {
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return;
+        }
+
         if (!is_wp_error($error)) {
             return;
         }

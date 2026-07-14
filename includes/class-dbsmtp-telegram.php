@@ -82,6 +82,10 @@ class DBSMTP_Telegram {
             return;
         }
 
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return;
+        }
+
         $settings = $this->settings->get_settings();
         if (empty($settings['telegram_notify_success'])) {
             return;
@@ -95,6 +99,10 @@ class DBSMTP_Telegram {
      */
     public function on_mail_failed($error) {
         if (!$this->is_enabled()) {
+            return;
+        }
+
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
             return;
         }
 

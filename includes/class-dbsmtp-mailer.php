@@ -51,6 +51,10 @@ class DBSMTP_Mailer {
      * @param PHPMailer\PHPMailer\PHPMailer $phpmailer
      */
     public function configure_phpmailer($phpmailer) {
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return;
+        }
+
         $s = $this->settings->get_settings();
 
         if (empty($s['enabled']) || empty($s['host'])) {
@@ -80,6 +84,10 @@ class DBSMTP_Mailer {
      * @return string
      */
     public function filter_from_email($from_email) {
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return $from_email;
+        }
+
         $s = $this->settings->get_settings();
 
         if (empty($s['enabled']) || empty($s['from_email']) || !is_email($s['from_email'])) {
@@ -101,6 +109,10 @@ class DBSMTP_Mailer {
      * @return string
      */
     public function filter_from_name($from_name) {
+        if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            return $from_name;
+        }
+
         $s = $this->settings->get_settings();
 
         if (empty($s['enabled']) || empty($s['from_name'])) {
