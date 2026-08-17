@@ -3,7 +3,7 @@ Contributors: lzolotarev
 Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later
@@ -25,6 +25,7 @@ Optionally, you can also send a plain-text copy of each email to a Telegram chat
 * **Test email** — one-click send to verify SMTP settings
 * **Delivery log** — last 200 messages with sent/failed status and error text
 * **Telegram copies** — optional plain-text copy of emails to a Telegram chat (opt-in)
+* **Disable admin password-change emails** — optional toggle to stop WordPress from emailing `admin_email` when a user resets their password
 * **Secure secrets** — optional `DBSMTP_PASSWORD`, `DBSMTP_TELEGRAM_BOT_TOKEN`, and `DBSMTP_TELEGRAM_CHAT_ID` constants in `wp-config.php`
 * **DevBrothers Admin Panel** — settings inside the unified DevBrothers interface
 
@@ -116,6 +117,10 @@ Make sure your sending domain has valid SPF, DKIM and DMARC records, and that th
 
 DevBrothers SMTP registers its settings page inside the DevBrothers admin UI. Install Admin Panel from WordPress.org first.
 
+= Can I stop admin emails when a user changes their password? =
+
+Yes. In **DevBrothers → SMTP**, under **WordPress notifications**, enable **Do not email the administrator about user password changes**. This stops the core “[Site] Password Changed” message sent to `admin_email` after a lost-password reset (and the same WooCommerce My Account reset). The confirmation email to the user is not affected.
+
 = Does this plugin work when SMTP is disabled? =
 
 Yes. When the SMTP toggle is off, WordPress uses its default mail transport and this plugin does not alter PHPMailer settings. Telegram notifications can still run independently if enabled.
@@ -128,6 +133,13 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 4. Delivery log
 
 == Changelog ==
+
+= 1.2.2 =
+* Optional setting to disable administrator emails when a user resets their password
+* Also covers WooCommerce password resets from My Account
+
+= 1.2.1 =
+* Optional fallback alert to the administrator via PHP mail() when SMTP delivery fails
 
 = 1.2.0 =
 * Optional Telegram copies of sent/failed emails (opt-in)
@@ -147,6 +159,9 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 * Integration with DevBrothers Admin Panel
 
 == Upgrade Notice ==
+
+= 1.2.2 =
+Adds an optional toggle to stop admin emails about user password resets.
 
 = 1.2.0 =
 Adds optional Telegram email copies. Review the Telegram settings and External services notes before enabling.

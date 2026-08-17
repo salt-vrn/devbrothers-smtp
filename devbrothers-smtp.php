@@ -3,7 +3,7 @@
  * Plugin Name: DevBrothers SMTP
  * Plugin URI: https://devbrothers.ru/smtp/
  * Description: Send WordPress emails through your own SMTP server, with a delivery log and optional Telegram copies.
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: DevBrothers
  * Author URI: https://devbrothers.ru
  * License: GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('DBSMTP_VERSION', '1.2.1');
+define('DBSMTP_VERSION', '1.2.2');
 define('DBSMTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DBSMTP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('DBSMTP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -78,6 +78,7 @@ class DBSMTP_Plugin {
     private function load_dependencies() {
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-settings.php';
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-fallback-alert.php';
+        require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-notifications.php';
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-mailer.php';
         require_once DBSMTP_PLUGIN_DIR . 'includes/class-dbsmtp-telegram.php';
     }
@@ -88,6 +89,7 @@ class DBSMTP_Plugin {
         $this->fallback_alert = new DBSMTP_Fallback_Alert($this->settings);
         $this->mailer        = new DBSMTP_Mailer($this->settings, $this->logger);
         $this->telegram      = new DBSMTP_Telegram($this->settings);
+        new DBSMTP_Notifications($this->settings);
     }
 
     private function init_hooks() {

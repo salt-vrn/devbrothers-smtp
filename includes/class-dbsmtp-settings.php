@@ -42,6 +42,7 @@ class DBSMTP_Settings {
             'fallback_alert_enabled' => false,
             'fallback_alert_email'   => '',
             'fallback_alert_cooldown'=> 30,
+            'disable_password_change_admin_email' => false,
         ];
 
         $settings = wp_parse_args(get_option($this->option_name, $defaults), $defaults);
@@ -422,6 +423,28 @@ class DBSMTP_Settings {
                                 </td>
                             </tr>
                         </table>
+
+                        <hr />
+
+                        <h4 class="dbsmtp-subhead"><?php esc_html_e('Уведомления WordPress', 'devbrothers-smtp'); ?></h4>
+                        <table class="form-table" role="presentation">
+                            <tr>
+                                <th scope="row"><?php esc_html_e('Смена пароля', 'devbrothers-smtp'); ?></th>
+                                <td>
+                                    <label class="dbsmtp-inline-toggle">
+                                        <input type="checkbox"
+                                               name="dbsmtp_settings[disable_password_change_admin_email]"
+                                               id="dbsmtp_disable_password_change_admin_email"
+                                               value="1"
+                                               <?php checked(!empty($settings['disable_password_change_admin_email'])); ?> />
+                                        <?php esc_html_e('Не слать администратору письмо о смене пароля пользователя', 'devbrothers-smtp'); ?>
+                                    </label>
+                                    <p class="dbsmtp-hint">
+                                        <?php esc_html_e('Отключает стандартное письмо WordPress на admin_email при сбросе пароля («Забыли пароль?»). Письмо самому пользователю не затрагивается. Работает и с WooCommerce.', 'devbrothers-smtp'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -734,6 +757,8 @@ class DBSMTP_Settings {
                 $sanitized['telegram_chat_id'] = $current_chat;
             }
         }
+
+        $sanitized['disable_password_change_admin_email'] = !empty($input['disable_password_change_admin_email']);
 
         $sanitized['fallback_alert_enabled'] = !empty($input['fallback_alert_enabled']);
 
