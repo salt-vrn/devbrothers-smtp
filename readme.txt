@@ -3,7 +3,7 @@ Contributors: lzolotarev
 Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later
@@ -134,6 +134,12 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 
 == Changelog ==
 
+= 1.2.3 =
+* SMTP failure alerts now use native PHP mail() instead of wp_mail(), so they no longer go through the same broken SMTP connection
+* If Telegram is enabled, the same SMTP-down alert is also sent there (PHP mail() is often disabled or silently dropped)
+* Fallback attempts are written to the delivery log
+* Admin notice when PHP mail() is disabled on the server
+
 = 1.2.2 =
 * Optional setting to disable administrator emails when a user resets their password
 * Also covers WooCommerce password resets from My Account
@@ -159,6 +165,9 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 * Integration with DevBrothers Admin Panel
 
 == Upgrade Notice ==
+
+= 1.2.3 =
+SMTP failure alerts no longer reuse wp_mail()/SMTP. If PHP mail() is disabled, enable Telegram to still get notified.
 
 = 1.2.2 =
 Adds an optional toggle to stop admin emails about user password resets.

@@ -101,6 +101,18 @@ class DBSMTP_Logger {
     }
 
     /**
+     * Ручная запись (например, результат fallback-уведомления).
+     *
+     * @param string|array $to
+     * @param string       $subject
+     * @param string       $status
+     * @param string       $message
+     */
+    public function log($to, $subject, $status, $message) {
+        $this->insert($to, $subject, $status, $message);
+    }
+
+    /**
      * Вставка записи в журнал.
      *
      * @param string|array $to      Получатель(и).

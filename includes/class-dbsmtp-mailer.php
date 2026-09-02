@@ -52,6 +52,10 @@ class DBSMTP_Mailer {
      */
     public function configure_phpmailer($phpmailer) {
         if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
+            // wp_mail() reuses the global PHPMailer; force mail() so a nested
+            // alert cannot ride the same broken SMTP connection.
+            $phpmailer->isMail();
+            $phpmailer->SMTPAuth = false;
             return;
         }
 

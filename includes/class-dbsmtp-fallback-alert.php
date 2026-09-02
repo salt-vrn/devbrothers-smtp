@@ -1,6 +1,9 @@
 <?php
 /**
- * Уведомление администратора через PHP mail() при сбое SMTP.
+ * Уведомление администратора при сбое SMTP.
+ *
+ * Письмо уходит напрямую через PHP mail(), минуя wp_mail() и SMTP.
+ * Если mail() недоступен или не сработал, а Telegram включён — дубль в Telegram.
  *
  * @package DevBrothers_SMTP
  */
@@ -37,6 +40,20 @@ class DBSMTP_Fallback_Alert {
      */
     public static function is_sending() {
         return self::$is_sending;
+    }
+
+    /**
+     * PHP mail() существует и не в disable_functions.
+     *
+     * @return bool
+     */
+    public static function is_php_mail_available() {
+        if (!function_exists('mail')) {
+            return false;
+        }
+
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+        return !in_array('mail', $disabled, true);
     }
 
     /**
@@ -78,17 +95,17 @@ class DBSMTP_Fallback_Alert {
      * @param WP_Error $error
      */
     private function send_alert($error) {
-        $settings = $this->settings->get_settings();
+        $settings  = $this->settings->get_settings();
         $recipient = $this->get_recipient_email($settings);
 
         if ($recipient === '') {
             return;
         }
 
-        $data         = $error->get_error_data();
-        $failed_to    = is_array($data) && isset($data['to']) ? $data['to'] : '';
-        $failed_subj  = is_array($data) && isset($data['subject']) ? (string) $data['subject'] : '';
-        $error_text   = $error->get_error_message();
+        $data        = $error->get_error_data();
+        $failed_to   = is_array($data) && isset($data['to']) ? $data['to'] : '';
+        $failed_subj = is_array($data) && isset($data['subject']) ? (string) $data['subject'] : '';
+        $error_text  = $error->get_error_message();
 
         if (is_array($failed_to)) {
             $failed_to = implode(', ', array_map('strval', $failed_to));
@@ -117,14 +134,210 @@ class DBSMTP_Fallback_Alert {
 
         self::$is_sending = true;
 
-        $sent = wp_mail($recipient, $subject, $body);
+        try {
+            $mail_sent     = $this->send_via_php_mail($recipient, $subject, $body, $settings);
+            $telegram_sent = $this->send_via_telegram($body);
+            $status_parts  = [];
 
-        self::$is_sending = false;
+            $status_parts[] = $mail_sent
+                ? __('PHP mail(): отправлено', 'devbrothers-smtp')
+                : (self::is_php_mail_available()
+                    ? __('PHP mail(): ошибка отправки', 'devbrothers-smtp')
+                    : __('PHP mail(): функция недоступна на сервере', 'devbrothers-smtp'));
 
-        if ($sent) {
+            if ($this->telegram_is_configured()) {
+                $status_parts[] = $telegram_sent
+                    ? __('Telegram: отправлено', 'devbrothers-smtp')
+                    : __('Telegram: ошибка отправки', 'devbrothers-smtp');
+            }
+
+            $this->log_attempt(
+                $recipient,
+                $subject,
+                ($mail_sent || $telegram_sent) ? DBSMTP_Logger::STATUS_SENT : DBSMTP_Logger::STATUS_FAILED,
+                implode('; ', $status_parts)
+            );
+
+            // Cooldown after any attempt so a flood of SMTP errors does not hammer mail()/Telegram.
             $cooldown = $this->get_cooldown_minutes($settings);
             set_transient(self::TRANSIENT_COOLDOWN, time(), $cooldown * MINUTE_IN_SECONDS);
+        } finally {
+            self::$is_sending = false;
         }
+    }
+
+    /**
+     * Direct PHP mail(), not wp_mail() — otherwise the global PHPMailer stays on SMTP
+     * and the "fallback" letter is sent through the same broken connection.
+     *
+     * @param string $to
+     * @param string $subject
+     * @param string $body
+     * @param array  $settings
+     * @return bool
+     */
+    private function send_via_php_mail($to, $subject, $body, $settings) {
+        if (!self::is_php_mail_available()) {
+            return false;
+        }
+
+        $from_email = $this->get_from_email($settings, $to);
+        if ($from_email === '') {
+            return false;
+        }
+
+        $from_name = $this->get_from_name($settings);
+        $headers   = [
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: 8bit',
+            'From: ' . $this->format_from_header($from_name, $from_email),
+        ];
+
+        $header_str = implode("\r\n", $headers);
+        $encoded_subject = $this->encode_header($subject);
+
+        $sent = $this->call_mail($to, $encoded_subject, $body, $header_str, $from_email);
+
+        if (!$sent) {
+            $sent = $this->call_mail($to, $encoded_subject, $body, $header_str, '');
+        }
+
+        return $sent;
+    }
+
+    /**
+     * @param string $to
+     * @param string $subject
+     * @param string $body
+     * @param string $headers
+     * @param string $envelope_from Empty to omit the 5th mail() argument.
+     * @return bool
+     */
+    private function call_mail($to, $subject, $body, $headers, $envelope_from) {
+        // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.mail -- Intentional native mail() fallback when SMTP is down.
+        if ($envelope_from !== '' && is_email($envelope_from) && stripos(PHP_OS, 'WIN') === false) {
+            return (bool) @mail($to, $subject, $body, $headers, '-f' . $envelope_from);
+        }
+
+        return (bool) @mail($to, $subject, $body, $headers);
+    }
+
+    /**
+     * @return bool
+     */
+    private function telegram_is_configured() {
+        if (!function_exists('dbsmtp_plugin')) {
+            return false;
+        }
+
+        $plugin = dbsmtp_plugin();
+        if (!$plugin->telegram || !$plugin->telegram->is_enabled()) {
+            return false;
+        }
+
+        return trim($plugin->telegram->get_bot_token()) !== ''
+            && trim($plugin->telegram->get_chat_id()) !== '';
+    }
+
+    /**
+     * @param string $body
+     * @return bool
+     */
+    private function send_via_telegram($body) {
+        if (!$this->telegram_is_configured()) {
+            return false;
+        }
+
+        $plugin  = dbsmtp_plugin();
+        $token   = trim($plugin->telegram->get_bot_token());
+        $chat_id = trim($plugin->telegram->get_chat_id());
+
+        $text = "⚠️ " . $body;
+        $result = $plugin->telegram->send_message($token, $chat_id, $text);
+
+        return $result === true;
+    }
+
+    /**
+     * @param string $to
+     * @param string $subject
+     * @param string $status
+     * @param string $message
+     */
+    private function log_attempt($to, $subject, $status, $message) {
+        if (!function_exists('dbsmtp_plugin')) {
+            return;
+        }
+
+        $logger = dbsmtp_plugin()->logger;
+        if (!$logger instanceof DBSMTP_Logger) {
+            return;
+        }
+
+        $logger->log($to, $subject, $status, $message);
+    }
+
+    /**
+     * @param array  $settings
+     * @param string $fallback
+     * @return string
+     */
+    private function get_from_email($settings, $fallback = '') {
+        $candidates = [
+            isset($settings['from_email']) ? $settings['from_email'] : '',
+            get_option('admin_email'),
+            $fallback,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $email = sanitize_email((string) $candidate);
+            if (is_email($email)) {
+                return $email;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array $settings
+     * @return string
+     */
+    private function get_from_name($settings) {
+        $name = isset($settings['from_name']) ? trim((string) $settings['from_name']) : '';
+        if ($name === '') {
+            $name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+        }
+        return $name !== '' ? $name : 'WordPress';
+    }
+
+    /**
+     * @param string $name
+     * @param string $email
+     * @return string
+     */
+    private function format_from_header($name, $email) {
+        $name = str_replace(["\r", "\n"], '', $name);
+        if ($name === '') {
+            return $email;
+        }
+
+        return $this->encode_header($name) . ' <' . $email . '>';
+    }
+
+    /**
+     * @param string $text
+     * @return string
+     */
+    private function encode_header($text) {
+        $text = str_replace(["\r", "\n"], '', $text);
+
+        if (function_exists('mb_encode_mimeheader')) {
+            return mb_encode_mimeheader($text, 'UTF-8', 'B', "\r\n");
+        }
+
+        return '=?UTF-8?B?' . base64_encode($text) . '?=';
     }
 
     /**

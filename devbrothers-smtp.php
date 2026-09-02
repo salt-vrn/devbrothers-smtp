@@ -3,7 +3,7 @@
  * Plugin Name: DevBrothers SMTP
  * Plugin URI: https://devbrothers.ru/smtp/
  * Description: Send WordPress emails through your own SMTP server, with a delivery log and optional Telegram copies.
- * Version: 1.2.2
+ * Version: 1.2.3
  * Author: DevBrothers
  * Author URI: https://devbrothers.ru
  * License: GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('DBSMTP_VERSION', '1.2.2');
+define('DBSMTP_VERSION', '1.2.3');
 define('DBSMTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DBSMTP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('DBSMTP_PLUGIN_BASENAME', plugin_basename(__FILE__));

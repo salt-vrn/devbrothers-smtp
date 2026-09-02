@@ -366,8 +366,13 @@ class DBSMTP_Settings {
 
                         <h4 class="dbsmtp-subhead"><?php esc_html_e('Уведомление при сбое SMTP', 'devbrothers-smtp'); ?></h4>
                         <p class="dbsmtp-hint">
-                            <?php esc_html_e('Если отправка через SMTP не удалась, администратору будет отправлено служебное письмо стандартной функцией PHP mail() (без SMTP). Повторные уведомления ограничены выбранным интервалом.', 'devbrothers-smtp'); ?>
+                            <?php esc_html_e('Если отправка через SMTP не удалась, администратору уходит служебное письмо напрямую через PHP mail() — без wp_mail() и без SMTP. На многих хостингах mail() выключен или письма теряются; тогда email не дойдёт. Если включён Telegram, то же уведомление будет отправлено туда.', 'devbrothers-smtp'); ?>
                         </p>
+                        <?php if (!DBSMTP_Fallback_Alert::is_php_mail_available()) : ?>
+                            <p class="dbsmtp-fallback-warning">
+                                <?php esc_html_e('На этом сервере функция PHP mail() недоступна. Email-уведомления о сбоях доставлены не будут. Включите Telegram — тогда сообщение о сбое уйдёт туда.', 'devbrothers-smtp'); ?>
+                            </p>
+                        <?php endif; ?>
                         <table class="form-table" role="presentation">
                             <tr>
                                 <th scope="row"><?php esc_html_e('Fallback-уведомление', 'devbrothers-smtp'); ?></th>
