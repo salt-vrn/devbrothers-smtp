@@ -13,6 +13,8 @@ class DBSMTP_Logger {
 
     const STATUS_SENT   = 'sent';
     const STATUS_FAILED = 'failed';
+    const TRANSPORT_SMTP = 'smtp';
+    const TRANSPORT_PHP  = 'php_mail';
 
     /**
      * Максимальное число хранимых записей.
@@ -50,6 +52,7 @@ class DBSMTP_Logger {
             email_to TEXT NOT NULL,
             subject TEXT NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'sent',
+            transport VARCHAR(20) NOT NULL DEFAULT '',
             message TEXT NULL,
             created_at DATETIME NOT NULL,
             PRIMARY KEY  (id),
@@ -69,6 +72,10 @@ class DBSMTP_Logger {
      * @param array $mail_data Данные письма из хука wp_mail_succeeded.
      */
     public function log_success($mail_data) {
+        if (class_exists('DBSMTP_Mailer') && DBSMTP_Mailer::should_suppress_log()) {
+            return;
+        }
+
         if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
             return;
         }
@@ -76,7 +83,7 @@ class DBSMTP_Logger {
         $to      = isset($mail_data['to']) ? $mail_data['to'] : '';
         $subject = isset($mail_data['subject']) ? $mail_data['subject'] : '';
 
-        $this->insert($to, $subject, self::STATUS_SENT, '');
+        $this->insert($to, $subject, self::STATUS_SENT, '', $this->current_transport());
     }
 
     /**
@@ -85,6 +92,10 @@ class DBSMTP_Logger {
      * @param WP_Error $error Ошибка из хука wp_mail_failed.
      */
     public function log_failure($error) {
+        if (class_exists('DBSMTP_Mailer') && DBSMTP_Mailer::should_suppress_log()) {
+            return;
+        }
+
         if (class_exists('DBSMTP_Fallback_Alert') && DBSMTP_Fallback_Alert::is_sending()) {
             return;
         }
@@ -97,7 +108,7 @@ class DBSMTP_Logger {
         $to      = isset($data['to']) ? $data['to'] : '';
         $subject = isset($data['subject']) ? $data['subject'] : '';
 
-        $this->insert($to, $subject, self::STATUS_FAILED, $error->get_error_message());
+        $this->insert($to, $subject, self::STATUS_FAILED, $error->get_error_message(), $this->current_transport());
     }
 
     /**
@@ -107,9 +118,10 @@ class DBSMTP_Logger {
      * @param string       $subject
      * @param string       $status
      * @param string       $message
+     * @param string       $transport smtp|php_mail|''.
      */
-    public function log($to, $subject, $status, $message) {
-        $this->insert($to, $subject, $status, $message);
+    public function log($to, $subject, $status, $message, $transport = '') {
+        $this->insert($to, $subject, $status, $message, $transport);
     }
 
     /**
@@ -118,13 +130,18 @@ class DBSMTP_Logger {
      * @param string|array $to      Получатель(и).
      * @param string       $subject Тема письма.
      * @param string       $status  Статус (sent|failed).
-     * @param string       $message Сообщение об ошибке.
+     * @param string       $message   Сообщение об ошибке.
+     * @param string       $transport Канал: smtp, php_mail или пусто.
      */
-    private function insert($to, $subject, $status, $message) {
+    private function insert($to, $subject, $status, $message, $transport = '') {
         global $wpdb;
 
         if (is_array($to)) {
             $to = implode(', ', $to);
+        }
+
+        if (!in_array($transport, [self::TRANSPORT_SMTP, self::TRANSPORT_PHP], true)) {
+            $transport = '';
         }
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Кастомная таблица логов плагина.
@@ -134,10 +151,11 @@ class DBSMTP_Logger {
                 'email_to'   => sanitize_text_field((string) $to),
                 'subject'    => sanitize_text_field((string) $subject),
                 'status'     => $status === self::STATUS_FAILED ? self::STATUS_FAILED : self::STATUS_SENT,
+                'transport'  => $transport,
                 'message'    => sanitize_text_field((string) $message),
                 'created_at' => current_time('mysql', true),
             ],
-            ['%s', '%s', '%s', '%s', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%s']
         );
 
         $this->prune();
@@ -236,6 +254,7 @@ class DBSMTP_Logger {
                             <th><?php esc_html_e('Дата', 'devbrothers-smtp'); ?></th>
                             <th><?php esc_html_e('Получатель', 'devbrothers-smtp'); ?></th>
                             <th><?php esc_html_e('Тема', 'devbrothers-smtp'); ?></th>
+                            <th><?php esc_html_e('Канал', 'devbrothers-smtp'); ?></th>
                             <th><?php esc_html_e('Статус', 'devbrothers-smtp'); ?></th>
                             <th><?php esc_html_e('Сообщение', 'devbrothers-smtp'); ?></th>
                         </tr>
@@ -247,6 +266,7 @@ class DBSMTP_Logger {
                                 <td><?php echo esc_html(get_date_from_gmt($log->created_at, 'd.m.Y H:i')); ?></td>
                                 <td><?php echo esc_html($log->email_to); ?></td>
                                 <td><?php echo esc_html($log->subject); ?></td>
+                                <td><?php echo esc_html($this->transport_label(isset($log->transport) ? $log->transport : '')); ?></td>
                                 <td>
                                     <span class="dbsmtp-status dbsmtp-status-<?php echo esc_attr($log->status); ?>">
                                         <?php echo $is_sent
@@ -262,5 +282,39 @@ class DBSMTP_Logger {
             <?php endif; ?>
         </div>
         <?php
+    }
+
+    /**
+     * Канал текущей попытки для автоматической записи журнала.
+     *
+     * @return string
+     */
+    private function current_transport() {
+        if (class_exists('DBSMTP_Mailer') && DBSMTP_Mailer::is_forcing_php_mail()) {
+            return self::TRANSPORT_PHP;
+        }
+
+        $settings = get_option('dbsmtp_settings', []);
+        if (is_array($settings) && !empty($settings['enabled']) && !empty($settings['host'])) {
+            return self::TRANSPORT_SMTP;
+        }
+
+        return self::TRANSPORT_PHP;
+    }
+
+    /**
+     * @param string $transport
+     * @return string
+     */
+    private function transport_label($transport) {
+        if ($transport === self::TRANSPORT_SMTP) {
+            return 'SMTP';
+        }
+
+        if ($transport === self::TRANSPORT_PHP) {
+            return 'PHP mail()';
+        }
+
+        return '—';
     }
 }

@@ -106,6 +106,12 @@ class DBSMTP_Telegram {
             return;
         }
 
+        // Пока впереди есть ещё одна попытка (запасной канал), ошибка не
+        // окончательная. Не шлём в Telegram ложный провал.
+        if (class_exists('DBSMTP_Mailer') && DBSMTP_Mailer::is_retry_pending()) {
+            return;
+        }
+
         $settings = $this->settings->get_settings();
         if (empty($settings['telegram_notify_failed'])) {
             return;

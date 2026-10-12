@@ -366,7 +366,7 @@ class DBSMTP_Settings {
 
                         <h4 class="dbsmtp-subhead"><?php esc_html_e('Уведомление при сбое SMTP', 'devbrothers-smtp'); ?></h4>
                         <p class="dbsmtp-hint">
-                            <?php esc_html_e('Если отправка через SMTP не удалась, администратору уходит служебное письмо напрямую через PHP mail() — без wp_mail() и без SMTP. На многих хостингах mail() выключен или письма теряются; тогда email не дойдёт. Если включён Telegram, то же уведомление будет отправлено туда.', 'devbrothers-smtp'); ?>
+                            <?php esc_html_e('Если SMTP не ответил, само письмо уходит запасным путём через PHP mail() хостинга. Адрес отправителя при этом не подменяется на SMTP-логин, чтобы хостинг его принял. Ниже — отдельное служебное уведомление администратору о сбое, тоже через PHP mail() и, если включён, в Telegram.', 'devbrothers-smtp'); ?>
                         </p>
                         <?php if (!DBSMTP_Fallback_Alert::is_php_mail_available()) : ?>
                             <p class="dbsmtp-fallback-warning">

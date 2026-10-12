@@ -64,6 +64,11 @@ class DBSMTP_Fallback_Alert {
             return;
         }
 
+        // Сбой самого PHP mail() — не сбой SMTP, о котором предупреждаем.
+        if (class_exists('DBSMTP_Mailer') && DBSMTP_Mailer::is_forcing_php_mail()) {
+            return;
+        }
+
         $settings = $this->settings->get_settings();
 
         if (empty($settings['enabled']) || empty($settings['host']) || empty($settings['fallback_alert_enabled'])) {
@@ -155,7 +160,8 @@ class DBSMTP_Fallback_Alert {
                 $recipient,
                 $subject,
                 ($mail_sent || $telegram_sent) ? DBSMTP_Logger::STATUS_SENT : DBSMTP_Logger::STATUS_FAILED,
-                implode('; ', $status_parts)
+                implode('; ', $status_parts),
+                DBSMTP_Logger::TRANSPORT_PHP
             );
 
             // Cooldown after any attempt so a flood of SMTP errors does not hammer mail()/Telegram.
@@ -264,8 +270,9 @@ class DBSMTP_Fallback_Alert {
      * @param string $subject
      * @param string $status
      * @param string $message
+     * @param string $transport
      */
-    private function log_attempt($to, $subject, $status, $message) {
+    private function log_attempt($to, $subject, $status, $message, $transport = '') {
         if (!function_exists('dbsmtp_plugin')) {
             return;
         }
@@ -275,7 +282,7 @@ class DBSMTP_Fallback_Alert {
             return;
         }
 
-        $logger->log($to, $subject, $status, $message);
+        $logger->log($to, $subject, $status, $message, $transport);
     }
 
     /**

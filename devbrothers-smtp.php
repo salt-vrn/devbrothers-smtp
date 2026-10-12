@@ -3,7 +3,7 @@
  * Plugin Name: DevBrothers SMTP
  * Plugin URI: https://devbrothers.ru/smtp/
  * Description: Send WordPress emails through your own SMTP server, with a delivery log and optional Telegram copies.
- * Version: 1.2.3
+ * Version: 1.3.0
  * Author: DevBrothers
  * Author URI: https://devbrothers.ru
  * License: GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('DBSMTP_VERSION', '1.2.3');
+define('DBSMTP_VERSION', '1.3.0');
 define('DBSMTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DBSMTP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('DBSMTP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -95,6 +95,7 @@ class DBSMTP_Plugin {
     private function init_hooks() {
         add_action('devbrothers_ready', [$this, 'register_in_devbrothers']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+        add_action('init', [$this, 'maybe_upgrade_db']);
         add_action('admin_init', [$this, 'maybe_upgrade_db']);
 
         add_action('wp_ajax_dbsmtp_send_test', [$this, 'ajax_send_test']);
@@ -219,6 +220,8 @@ class DBSMTP_Plugin {
             wp_send_json_error(['message' => __('Укажите корректный email получателя.', 'devbrothers-smtp')]);
         }
 
+        // Тест должен проверять именно SMTP, а не обходить его из-за недавней паузы.
+        DBSMTP_Mailer::reset_circuit();
         $this->mailer->reset_last_error();
 
         $subject = __('Тестовое письмо DevBrothers SMTP', 'devbrothers-smtp');
@@ -231,12 +234,20 @@ class DBSMTP_Plugin {
         $sent = wp_mail($recipient, $subject, $body);
 
         if ($sent) {
-            wp_send_json_success([
-                'message' => sprintf(
+            $message = $this->mailer->did_fallback()
+                ? sprintf(
+                    /* translators: %s: recipient email */
+                    __('SMTP не ответил. Письмо отправлено на %s через PHP mail().', 'devbrothers-smtp'),
+                    $recipient
+                )
+                : sprintf(
                     /* translators: %s: recipient email */
                     __('Письмо успешно отправлено на %s.', 'devbrothers-smtp'),
                     $recipient
-                ),
+                );
+
+            wp_send_json_success([
+                'message' => $message,
             ]);
         }
 

@@ -3,7 +3,7 @@ Contributors: lzolotarev
 Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.2.3
+Stable tag: 1.3.0
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later
@@ -134,6 +134,14 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 
 == Changelog ==
 
+= 1.3.0 =
+* If SMTP delivery fails, the email itself is now sent through PHP mail() (fallback delivery) instead of being lost; the From address is left unchanged so the host accepts it
+* SMTP is paused after a failure (circuit breaker) — while the pause is active, emails go straight through PHP mail(), and a retry is still scheduled
+* Delivery log: new "Channel" column (smtp / php_mail); fallback attempts are logged with the real channel
+* No false Telegram failure alert while a fallback attempt is still pending
+* Test email resets the SMTP-down pause and reports when the message was delivered via PHP mail()
+* Database upgrade routine to add the log transport column
+
 = 1.2.3 =
 * SMTP failure alerts now use native PHP mail() instead of wp_mail(), so they no longer go through the same broken SMTP connection
 * If Telegram is enabled, the same SMTP-down alert is also sent there (PHP mail() is often disabled or silently dropped)
@@ -165,6 +173,9 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 * Integration with DevBrothers Admin Panel
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+If SMTP fails, the email is now delivered through PHP mail() automatically (fallback delivery), and the delivery log shows which channel was used.
 
 = 1.2.3 =
 SMTP failure alerts no longer reuse wp_mail()/SMTP. If PHP mail() is disabled, enable Telegram to still get notified.

@@ -279,6 +279,10 @@
     color: #b32d2e;
 }
 
+.dbsmtp-logs-table td:nth-child(4) {
+    white-space: nowrap;
+}
+
 .dbsmtp-provider-hint {
     max-width: 600px;
     margin-top: 8px;
