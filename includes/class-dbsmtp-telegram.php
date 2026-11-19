@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 class DBSMTP_Telegram {
 
     const API_URL = 'https://api.telegram.org/bot';
+    const SKIP_HEADER = 'X-DevBrothers-Skip-Telegram: 1';
 
     /**
      * @var DBSMTP_Settings
@@ -26,6 +27,8 @@ class DBSMTP_Telegram {
 
         add_action('wp_mail_succeeded', [$this, 'on_mail_succeeded'], 15, 1);
         add_action('wp_mail_failed', [$this, 'on_mail_failed'], 15, 1);
+        add_filter('retrieve_password_notification_email', [$this, 'mark_password_reset_email']);
+        add_filter('woocommerce_email_headers', [$this, 'mark_woocommerce_email'], 10, 2);
     }
 
     /**
@@ -91,7 +94,7 @@ class DBSMTP_Telegram {
             return;
         }
 
-        $this->notify($mail_data, 'success', '');
+        $this->notify($mail_data, 'success');
     }
 
     /**
@@ -121,10 +124,10 @@ class DBSMTP_Telegram {
             return;
         }
 
-        $data = $error->get_error_data();
-        $mail_data = is_array($data) ? $data : [];
-
-        $this->notify($mail_data, 'failed', $error->get_error_message());
+        $mail_data = $error->get_error_data();
+        if (is_array($mail_data)) {
+            $this->notify($mail_data, 'failed', $error->get_error_message());
+        }
     }
 
     /**
@@ -132,7 +135,11 @@ class DBSMTP_Telegram {
      * @param string $status success|failed
      * @param string $error_message
      */
-    private function notify($mail_data, $status, $error_message) {
+    private function notify($mail_data, $status, $error_message = '') {
+        if ($this->should_skip_mail($mail_data)) {
+            return;
+        }
+
         $token   = trim($this->get_bot_token());
         $chat_id = trim($this->get_chat_id());
 
@@ -144,72 +151,81 @@ class DBSMTP_Telegram {
         $this->send_message($token, $chat_id, $text);
     }
 
+    public function mark_password_reset_email($email) {
+        $email['headers'] = $this->add_skip_header($email['headers'] ?? '');
+        return $email;
+    }
+
+    public function mark_woocommerce_email($headers, $email_id) {
+        return $email_id === 'customer_reset_password' ? $this->add_skip_header($headers) : $headers;
+    }
+
+    private function add_skip_header($headers) {
+        if (is_array($headers)) {
+            $headers[] = self::SKIP_HEADER;
+            return $headers;
+        }
+
+        $headers = rtrim((string) $headers, "\r\n");
+        return $headers === '' ? self::SKIP_HEADER : $headers . "\r\n" . self::SKIP_HEADER;
+    }
+
+    public function should_skip_mail($mail_data) {
+        $headers = $mail_data['headers'] ?? '';
+        $lines = is_array($headers) ? $headers : preg_split('/\r\n|\r|\n/', (string) $headers);
+        foreach ($lines as $line) {
+            if (is_string($line) && preg_match('/^X-DevBrothers-Skip-Telegram:\s*1\s*$/i', trim($line))) {
+                return true;
+            }
+        }
+
+        $message = html_entity_decode((string) ($mail_data['message'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $has_reset_link = preg_match(
+            '~\bwp-login\.php\?(?:[^\s<>"\'#]*&)?action=(?:rp|resetpass)(?=[&#\s<>"\']|$)~i',
+            $message
+        );
+        return $has_reset_link || (bool) apply_filters('dbsmtp_skip_telegram_email', false, $mail_data);
+    }
+
     /**
      * @param array  $mail_data
      * @param string $status
-     * @param string $error_message
+     * @param string $error_message Legacy argument, not forwarded.
      * @return string
      */
     public function build_message($mail_data, $status = 'success', $error_message = '') {
-        $to      = isset($mail_data['to']) ? $mail_data['to'] : '';
-        $subject = isset($mail_data['subject']) ? $mail_data['subject'] : '';
-        $body    = isset($mail_data['message']) ? $mail_data['message'] : '';
-        $headers = isset($mail_data['headers']) ? $mail_data['headers'] : '';
-
-        if (is_array($to)) {
-            $to = implode(', ', array_map('strval', $to));
-        }
-
-        $from = $this->extract_from_header($headers);
-
-        if ($status === 'failed') {
-            $title = __('❌ Ошибка отправки письма', 'devbrothers-smtp');
-        } else {
-            $title = __('📧 Письмо отправлено', 'devbrothers-smtp');
-        }
-
-        $lines = [
-            $title,
-            '',
-            sprintf('%s: %s', __('Сайт', 'devbrothers-smtp'), get_bloginfo('name')),
-            sprintf('%s: %s', __('URL', 'devbrothers-smtp'), home_url('/')),
-        ];
+        $lines = $this->status_lines($status);
+        $to = $mail_data['to'] ?? '';
+        $to = is_array($to) ? implode(', ', $to) : (string) $to;
+        $subject = (string) ($mail_data['subject'] ?? '');
+        $from = $this->extract_from_header($mail_data['headers'] ?? '');
+        $body = (string) ($mail_data['message'] ?? '');
+        // Блочные теги -> переносы строк, иначе абзацы слипаются после strip_tags().
+        $body = preg_replace('~<\s*(br|/p|/div|/tr|/li|/h[1-6])\b[^>]*>~i', "\n", $body);
+        $body = trim(html_entity_decode(wp_strip_all_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $body = preg_replace("/[ \t]+/u", ' ', $body);
+        $body = preg_replace("/\n{3,}/u", "\n\n", $body);
+        $body = trim($body);
 
         if ($from !== '') {
             $lines[] = sprintf('%s: %s', __('От', 'devbrothers-smtp'), $from);
         }
-
         if ($to !== '') {
             $lines[] = sprintf('%s: %s', __('Кому', 'devbrothers-smtp'), $to);
         }
-
         if ($subject !== '') {
             $lines[] = sprintf('%s: %s', __('Тема', 'devbrothers-smtp'), $subject);
         }
-
         if ($error_message !== '') {
             $lines[] = sprintf('%s: %s', __('Ошибка', 'devbrothers-smtp'), $error_message);
         }
-
-        $attachments = isset($mail_data['attachments']) ? $mail_data['attachments'] : [];
-        if (is_array($attachments) && !empty($attachments)) {
-            $lines[] = sprintf(
-                '%s: %d',
-                __('Вложения', 'devbrothers-smtp'),
-                count($attachments)
-            );
-        }
-
-        $plain_body = $this->message_to_plain_text($body);
-        if ($plain_body !== '') {
+        if ($body !== '') {
             $lines[] = '';
             $lines[] = __('Содержимое:', 'devbrothers-smtp');
-            $lines[] = $plain_body;
+            $lines[] = $body;
         }
 
-        $text = implode("\n", $lines);
-
-        return $this->truncate_message($text);
+        return $this->truncate_message(implode("\n", $lines));
     }
 
     /**
@@ -235,22 +251,23 @@ class DBSMTP_Telegram {
         return '';
     }
 
-    /**
-     * @param mixed $body
-     * @return string
-     */
-    private function message_to_plain_text($body) {
-        $body = (string) $body;
-        if ($body === '') {
-            return '';
+    public function build_status_message($status) {
+        return $this->truncate_message(implode("\n", $this->status_lines($status)));
+    }
+
+    private function status_lines($status) {
+        if ($status === 'failed') {
+            $title = __('❌ Ошибка отправки письма', 'devbrothers-smtp');
+        } else {
+            $title = __('📧 Письмо отправлено', 'devbrothers-smtp');
         }
 
-        $body = wp_strip_all_tags($body);
-        $body = html_entity_decode($body, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $body = preg_replace("/[ \t]+/u", ' ', $body);
-        $body = preg_replace("/\n{3,}/u", "\n\n", $body);
-
-        return trim($body);
+        return [
+            $title,
+            '',
+            sprintf('%s: %s', __('Сайт', 'devbrothers-smtp'), get_bloginfo('name')),
+            sprintf('%s: %s', __('URL', 'devbrothers-smtp'), home_url('/')),
+        ];
     }
 
     /**
@@ -303,16 +320,19 @@ class DBSMTP_Telegram {
         $response = wp_remote_post(
             $url,
             [
-                'timeout' => 15,
-                'body'    => [
+                'timeout'             => 15,
+                'redirection'         => 0,
+                'limit_response_size' => 65536,
+                'body'                => [
                     'chat_id' => $chat_id,
                     'text'    => $text,
+                    'link_preview_options' => wp_json_encode(['is_disabled' => true]),
                 ],
             ]
         );
 
         if (is_wp_error($response)) {
-            return $response;
+            return new WP_Error('dbsmtp_telegram_connection', __('Не удалось подключиться к Telegram API.', 'devbrothers-smtp'));
         }
 
         $code = (int) wp_remote_retrieve_response_code($response);
@@ -322,20 +342,14 @@ class DBSMTP_Telegram {
             return true;
         }
 
-        $description = '';
-        if (is_array($body) && !empty($body['description'])) {
-            $description = (string) $body['description'];
-        }
-
-        if ($description === '') {
-            $description = sprintf(
+        return new WP_Error(
+            'dbsmtp_telegram_api',
+            sprintf(
                 /* translators: %d: HTTP status code */
                 __('Telegram API вернул код %d.', 'devbrothers-smtp'),
                 $code
-            );
-        }
-
-        return new WP_Error('dbsmtp_telegram_api', $description);
+            )
+        );
     }
 
     /**

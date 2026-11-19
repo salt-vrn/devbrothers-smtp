@@ -3,7 +3,7 @@
  * Plugin Name: DevBrothers SMTP
  * Plugin URI: https://devbrothers.ru/smtp/
  * Description: Send WordPress emails through your own SMTP server, with a delivery log and optional Telegram copies.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: DevBrothers
  * Author URI: https://devbrothers.ru
  * License: GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('DBSMTP_VERSION', '1.3.0');
+define('DBSMTP_VERSION', '1.3.1');
 define('DBSMTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DBSMTP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('DBSMTP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -214,7 +214,7 @@ class DBSMTP_Plugin {
             wp_send_json_error(['message' => __('Недостаточно прав.', 'devbrothers-smtp')]);
         }
 
-        $recipient = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+        $recipient = isset($_POST['email']) && is_string($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
 
         if (empty($recipient) || !is_email($recipient)) {
             wp_send_json_error(['message' => __('Укажите корректный email получателя.', 'devbrothers-smtp')]);
@@ -277,7 +277,7 @@ class DBSMTP_Plugin {
         // Токен не прогоняем через sanitize_text_field — только убираем переносы,
         // формат проверяется в DBSMTP_Telegram::send_message().
         $token = '';
-        if (isset($_POST['bot_token'])) {
+        if (isset($_POST['bot_token']) && is_string($_POST['bot_token'])) {
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Token format validated in send_message().
             $token = trim(str_replace(["\r", "\n"], '', (string) wp_unslash($_POST['bot_token'])));
         }
@@ -286,7 +286,7 @@ class DBSMTP_Plugin {
         }
 
         $chat_id = '';
-        if (isset($_POST['chat_id'])) {
+        if (isset($_POST['chat_id']) && is_string($_POST['chat_id'])) {
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Chat ID format validated in send_message().
             $chat_id = trim(str_replace([' ', "\r", "\n"], '', (string) wp_unslash($_POST['chat_id'])));
         }

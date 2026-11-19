@@ -141,7 +141,9 @@ class DBSMTP_Fallback_Alert {
 
         try {
             $mail_sent     = $this->send_via_php_mail($recipient, $subject, $body, $settings);
-            $telegram_sent = $this->send_via_telegram($body);
+            $telegram_allowed = is_array($data) && $this->telegram_is_configured()
+                && !dbsmtp_plugin()->telegram->should_skip_mail($data);
+            $telegram_sent = $telegram_allowed && $this->send_via_telegram();
             $status_parts  = [];
 
             $status_parts[] = $mail_sent
@@ -150,7 +152,7 @@ class DBSMTP_Fallback_Alert {
                     ? __('PHP mail(): ошибка отправки', 'devbrothers-smtp')
                     : __('PHP mail(): функция недоступна на сервере', 'devbrothers-smtp'));
 
-            if ($this->telegram_is_configured()) {
+            if ($telegram_allowed) {
                 $status_parts[] = $telegram_sent
                     ? __('Telegram: отправлено', 'devbrothers-smtp')
                     : __('Telegram: ошибка отправки', 'devbrothers-smtp');
@@ -247,10 +249,9 @@ class DBSMTP_Fallback_Alert {
     }
 
     /**
-     * @param string $body
      * @return bool
      */
-    private function send_via_telegram($body) {
+    private function send_via_telegram() {
         if (!$this->telegram_is_configured()) {
             return false;
         }
@@ -259,7 +260,7 @@ class DBSMTP_Fallback_Alert {
         $token   = trim($plugin->telegram->get_bot_token());
         $chat_id = trim($plugin->telegram->get_chat_id());
 
-        $text = "⚠️ " . $body;
+        $text = $plugin->telegram->build_status_message('failed');
         $result = $plugin->telegram->send_message($token, $chat_id, $text);
 
         return $result === true;

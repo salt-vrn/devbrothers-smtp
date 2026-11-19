@@ -130,6 +130,10 @@ class DBSMTP_Settings {
      * Отрисовка страницы настроек.
      */
     public function render_settings_page() {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html__('Недостаточно прав', 'devbrothers-smtp'));
+        }
+
         $settings_saved = false;
 
         if (isset($_POST['dbsmtp_save_settings'])) {
@@ -138,10 +142,6 @@ class DBSMTP_Settings {
                 || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'dbsmtp_settings_nonce')
             ) {
                 wp_die(esc_html__('Ошибка безопасности', 'devbrothers-smtp'));
-            }
-
-            if (!current_user_can('manage_options')) {
-                wp_die(esc_html__('Недостаточно прав', 'devbrothers-smtp'));
             }
 
             $this->save_settings_internal();
@@ -466,7 +466,7 @@ class DBSMTP_Settings {
                         <div class="dbsmtp-card-title">
                             <span class="dbsmtp-card-icon dbsmtp-card-icon-telegram"><span class="dashicons dashicons-format-chat"></span></span>
                             <div>
-                                <h3><?php esc_html_e('Дублировать письма в Telegram', 'devbrothers-smtp'); ?></h3>
+                                <h3><?php esc_html_e('Уведомления о доставке в Telegram', 'devbrothers-smtp'); ?></h3>
                                 <span class="dbsmtp-card-status dbsmtp-telegram-status<?php echo esc_attr($telegram_active ? ' dbsmtp-status-on' : ''); ?>">
                                     <?php echo $telegram_active
                                         ? esc_html__('Включён', 'devbrothers-smtp')
@@ -488,7 +488,7 @@ class DBSMTP_Settings {
 
                     <div class="dbsmtp-card-body">
                         <p class="dbsmtp-hint">
-                            <?php esc_html_e('При отправке писем через wp_mail содержимое будет отправляться в указанный Telegram-чат. Создайте бота через @BotFather, напишите ему /start и узнайте Chat ID через getUpdates или @userinfobot.', 'devbrothers-smtp'); ?>
+                            <?php esc_html_e('В Telegram отправляются тема, получатель и текст обычного письма. Письма сброса пароля WordPress и WooCommerce не дублируются.', 'devbrothers-smtp'); ?>
                         </p>
 
                         <table class="form-table" role="presentation">
@@ -700,11 +700,10 @@ class DBSMTP_Settings {
         $current_password = isset($current['password']) ? $current['password'] : '';
 
         if ($this->password_in_config()) {
-            // Поле скрыто — сохраняем прежнее значение из БД.
-            $sanitized['password'] = $current_password;
+            $sanitized['password'] = '';
         } else {
-            $new_password = isset($input['password'])
-                ? trim(str_replace(["\r", "\n"], '', (string) $input['password']))
+            $new_password = isset($input['password']) && is_string($input['password'])
+                ? str_replace(["\r", "\n"], '', $input['password'])
                 : '';
 
             // Пустое поле означает «не менять» — оставляем прежний пароль.
@@ -729,11 +728,10 @@ class DBSMTP_Settings {
         $current_chat  = isset($current['telegram_chat_id']) ? $current['telegram_chat_id'] : '';
 
         if ($this->telegram_token_in_config()) {
-            // Поле скрыто — сохраняем прежнее значение из БД.
-            $sanitized['telegram_bot_token'] = $current_token;
+            $sanitized['telegram_bot_token'] = '';
         } else {
-            $new_token = isset($input['telegram_bot_token'])
-                ? trim(str_replace(["\r", "\n"], '', (string) $input['telegram_bot_token']))
+            $new_token = isset($input['telegram_bot_token']) && is_string($input['telegram_bot_token'])
+                ? trim(str_replace(["\r", "\n"], '', $input['telegram_bot_token']))
                 : '';
 
             if ($new_token === '') {
@@ -748,9 +746,9 @@ class DBSMTP_Settings {
         }
 
         if ($this->telegram_chat_id_in_config()) {
-            $sanitized['telegram_chat_id'] = $current_chat;
+            $sanitized['telegram_chat_id'] = '';
         } else {
-            $chat_raw = isset($input['telegram_chat_id']) ? (string) $input['telegram_chat_id'] : '';
+            $chat_raw = isset($input['telegram_chat_id']) && is_string($input['telegram_chat_id']) ? $input['telegram_chat_id'] : $current_chat;
             $chat_raw = trim(str_replace(["\r", "\n", ' '], '', $chat_raw));
 
             if ($chat_raw === '') {

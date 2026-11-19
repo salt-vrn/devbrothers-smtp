@@ -3,7 +3,7 @@ Contributors: lzolotarev
 Tags: smtp, email, telegram, wp_mail, mail
 Requires at least: 5.8
 Tested up to: 7.0
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 Requires PHP: 7.4
 Requires Plugins: devbrothers-admin-panel
 License: GPLv2 or later
@@ -15,7 +15,7 @@ Send WordPress emails through your SMTP server, with a delivery log and optional
 
 **DevBrothers SMTP** routes the standard WordPress mailer (`wp_mail`) through your own SMTP server instead of PHP `mail()`. It configures the PHPMailer instance bundled with WordPress on the `phpmailer_init` hook, so every plugin and theme that calls `wp_mail()` benefits automatically.
 
-Optionally, you can also send a plain-text copy of each email to a Telegram chat (success and/or failure). Telegram notifications are disabled by default and only run when you enable them and provide a bot token and chat ID.
+Optionally, you can send plain-text copies of regular emails to a Telegram chat. Password reset emails are excluded. Telegram notifications are disabled by default and require a bot token and chat ID.
 
 = Key Features =
 
@@ -24,7 +24,7 @@ Optionally, you can also send a plain-text copy of each email to a Telegram chat
 * **Custom sender** — optional From email and From name, with a force option
 * **Test email** — one-click send to verify SMTP settings
 * **Delivery log** — last 200 messages with sent/failed status and error text
-* **Telegram copies** — optional plain-text copy of emails to a Telegram chat (opt-in)
+* **Telegram notifications** — optional copies of regular email, excluding password reset emails
 * **Disable admin password-change emails** — optional toggle to stop WordPress from emailing `admin_email` when a user resets their password
 * **Secure secrets** — optional `DBSMTP_PASSWORD`, `DBSMTP_TELEGRAM_BOT_TOKEN`, and `DBSMTP_TELEGRAM_CHAT_ID` constants in `wp-config.php`
 * **DevBrothers Admin Panel** — settings inside the unified DevBrothers interface
@@ -59,7 +59,7 @@ Authentication credentials (username and password) are stored in your WordPress 
 
 = Telegram Bot API (optional) =
 
-When Telegram notifications are enabled, the plugin sends a plain-text summary of the email (site name, URL, From, To, subject, body text, and optional error message) to the Telegram Bot API endpoint `https://api.telegram.org/bot{token}/sendMessage`.
+When Telegram notifications are enabled, the plugin sends delivery status, site information, sender, recipient, subject and plain-text body of regular emails to `https://api.telegram.org/bot{token}/sendMessage`. WordPress and WooCommerce password reset emails are not copied. Attachments are not sent; for failed messages the transport error text is included. Separate fallback alerts contain only status and site information.
 
 Data is sent only when:
 
@@ -103,11 +103,11 @@ You can define constants in `wp-config.php` instead of storing values in the dat
 `define('DBSMTP_TELEGRAM_BOT_TOKEN', '123456:ABC...');`
 `define('DBSMTP_TELEGRAM_CHAT_ID', '123456789');`
 
-When a constant is defined, the matching field in the settings UI is hidden and the constant value is used.
+When a constant is defined, the matching field in the settings UI is hidden and the constant value is used. Save the settings once to clear the corresponding old value from the live database. This does not remove values from old backups.
 
 = Does Telegram receive the full email body? =
 
-Yes, when enabled. The plugin sends a plain-text version (HTML tags stripped) truncated to Telegram’s message length limit. Attachments are not uploaded — only the attachment count is mentioned.
+For regular emails, Telegram receives the plain-text body, truncated to the Telegram message length limit. It does not receive WordPress or WooCommerce password reset emails. Developers can exclude other sensitive mail with the `dbsmtp_skip_telegram_email` filter or the `X-DevBrothers-Skip-Telegram: 1` mail header.
 
 = My emails go to spam. What should I check? =
 
@@ -133,6 +133,13 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 4. Delivery log
 
 == Changelog ==
+
+= 1.3.1 =
+* Keep plain-text copies of regular emails in Telegram, but exclude WordPress and WooCommerce password reset emails
+* Keep the sender and the transport error text in notifications
+* Send only delivery status and site information in fallback alerts.
+* Disable Telegram link previews and redirects; do not return raw API or connection errors that may contain bot tokens.
+* Clear database copies of configuration-managed credentials when settings are saved.
 
 = 1.3.0 =
 * If SMTP delivery fails, the email itself is now sent through PHP mail() (fallback delivery) instead of being lost; the From address is left unchanged so the host accepts it
@@ -174,8 +181,8 @@ Yes. When the SMTP toggle is off, WordPress uses its default mail transport and 
 
 == Upgrade Notice ==
 
-= 1.3.0 =
-If SMTP fails, the email is now delivered through PHP mail() automatically (fallback delivery), and the delivery log shows which channel was used.
+= 1.3.1 =
+Regular emails still go to Telegram if notifications are enabled. Password reset emails still reach their normal recipient but are not copied to Telegram. If credentials are supplied in wp-config.php, save the plugin settings once to clear the old database values.
 
 = 1.2.3 =
 SMTP failure alerts no longer reuse wp_mail()/SMTP. If PHP mail() is disabled, enable Telegram to still get notified.
